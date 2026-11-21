@@ -1,0 +1,144 @@
+{
+  "name": "omnibuf-vscode",
+  "displayName": "OmniBuf",
+  "description": "View and edit OmniBuf (.obuf) binary files as decoded JSON and hex using the omnibuf CLI",
+  "version": "0.1.0",
+  "publisher": "omnibuf",
+  "license": "Apache-2.0",
+  "icon": "media/icon.png",
+  "homepage": "https://github.com/omnibuf/omnibuf-vscode#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omnibuf/omnibuf-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/omnibuf/omnibuf-vscode/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Formatters",
+    "Other"
+  ],
+  "keywords": [
+    "omnibuf",
+    "obuf",
+    "protobuf",
+    "binary",
+    "hex",
+    "json"
+  ],
+  "activationEvents": [
+    "onCustomEditor:omnibuf.obufViewer",
+    "onCommand:omnibuf.openAsJson",
+    "onCommand:omnibuf.openRawHex",
+    "onCommand:omnibuf.copyDecodedJson"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "omnibuf.obufViewer",
+        "displayName": "OmniBuf Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.obuf"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "omnibuf.openAsJson",
+        "title": "OmniBuf: Open in OmniBuf Viewer"
+      },
+      {
+        "command": "omnibuf.openRawHex",
+        "title": "OmniBuf: Open in Hex / Binary Editor"
+      },
+      {
+        "command": "omnibuf.copyDecodedJson",
+        "title": "OmniBuf: Copy Decoded JSON"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "omnibuf.openAsJson",
+          "when": "resourceExtname == .obuf",
+          "group": "navigation"
+        },
+        {
+          "command": "omnibuf.copyDecodedJson",
+          "when": "resourceExtname == .obuf",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "OmniBuf",
+      "properties": {
+        "omnibuf.cliPath": {
+          "type": "string",
+          "default": "omnibuf",
+          "description": "Path to the omnibuf CLI executable."
+        },
+        "omnibuf.defaultView": {
+          "type": "string",
+          "enum": [
+            "json",
+            "split",
+            "hex"
+          ],
+          "default": "json",
+          "description": "Default view mode when opening .obuf files."
+        },
+        "omnibuf.schemaPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to a FileDescriptorSet (.json, .pb, .pb.gz) passed via -s."
+        },
+        "omnibuf.messageType": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Protobuf message type name passed via -t when schemaPath is set."
+        },
+        "omnibuf.maxHexBytes": {
+          "type": "number",
+          "default": 262144,
+          "minimum": 1024,
+          "description": "Maximum number of bytes rendered in the built-in hex view."
+        },
+        "omnibuf.includeField0": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include Field #0 inline field names when saving in schema-less mode (passes --no-field0 when false)."
+        },
+        "omnibuf.deterministic": {
+          "type": "boolean",
+          "default": false,
+          "description": "Sort map keys and schema fields deterministically when saving (--deterministic)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.mjs",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "package": "npx @vscode/vsce package --no-dependencies",
+    "clean": "rm -rf dist *.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.2"
+  }
+}
