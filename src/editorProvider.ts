@@ -5,10 +5,21 @@ import { decodeFile, encodeJson, type DecodeOutcome } from './cli';
 import { formatHexDump } from './hex';
 import { formatByteCount, renderWebviewHtml, type ViewMode } from './webview';
 
+export function resolveSchemaPath(schemaPath: string, uri: vscode.Uri): string {
+  const trimmed = schemaPath.trim();
+  if (!trimmed || path.isAbsolute(trimmed)) {
+    return trimmed;
+  }
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri)?.uri.fsPath;
+  const baseDir = workspaceFolder || path.dirname(uri.fsPath);
+  return path.resolve(baseDir, trimmed);
+}
+
 class ObufDocument implements vscode.CustomDocument {
   public rawBytes: Uint8Array;
   public decode: DecodeOutcome;
   public jsonText: string;
+  private _savedJsonText: string;
 
   private readonly _onDidChange = new vscode.EventEmitter<{
     readonly label: string;
@@ -28,6 +39,15 @@ class ObufDocument implements vscode.CustomDocument {
     this.rawBytes = rawBytes;
     this.decode = decode;
     this.jsonText = decode.ok ? decode.json : '';
+    this._savedJsonText = this.jsonText;
+  }
+
+  public get isDirty(): boolean {
+    return this.jsonText !== this._savedJsonText;
+  }
+
+  public markSaved(): void {
+    this._savedJsonText = this.jsonText;
   }
 
   public applyEdit(newText: string): void {
@@ -53,6 +73,7 @@ class ObufDocument implements vscode.CustomDocument {
     this.rawBytes = rawBytes;
     this.decode = decode;
     this.jsonText = decode.ok ? decode.json : '';
+    this._savedJsonText = this.jsonText;
     this._onDidSyncContent.fire();
   }
 
@@ -73,11 +94,12 @@ export class ObufEditorProvider implements vscode.CustomEditorProvider<ObufDocum
   private readonly _panelsByUri = new Map<string, Set<vscode.WebviewPanel>>();
   private readonly _writingUris = new Set<string>();
 
-  private getCliConfig() {
-    const cfg = vscode.workspace.getConfiguration('omnibuf');
+  private getCliConfig(uri?: vscode.Uri) {
+    const cfg = vscode.workspace.getConfiguration('omnibuf', uri);
+    const rawSchemaPath = cfg.get<string>('schemaPath', '');
     return {
       cliPath: cfg.get<string>('cliPath', 'omnibuf'),
-      schemaPath: cfg.get<string>('schemaPath', ''),
+      schemaPath: uri ? resolveSchemaPath(rawSchemaPath, uri) : rawSchemaPath.trim(),
       messageType: cfg.get<string>('messageType', ''),
       includeField0: cfg.get<boolean>('includeField0', true),
       deterministic: cfg.get<boolean>('deterministic', false),
@@ -89,7 +111,7 @@ export class ObufEditorProvider implements vscode.CustomEditorProvider<ObufDocum
     uri: vscode.Uri,
     openContext: vscode.CustomDocumentOpenContext,
   ): Promise<ObufDocument> {
-    const cfg = this.getCliConfig();
+    const cfg = this.getCliConfig(uri);
     const [rawBytes, decode] = await Promise.all([
       vscode.workspace.fs.readFile(uri),
       decodeFile(uri.fsPath, {
@@ -139,9 +161,14 @@ export class ObufEditorProvider implements vscode.CustomEditorProvider<ObufDocum
     panels.add(webviewPanel);
 
     let currentViewMode = this.getDefaultViewMode();
+    let disposed = false;
+    let externalChangePromptOpen = false;
 
     const renderFull = () => {
-      const cfg = this.getCliConfig();
+      if (disposed) {
+        return;
+      }
+      const cfg = this.getCliConfig(document.uri);
       const hex = formatHexDump(document.rawBytes, cfg.maxHexBytes);
       const nonce = randomBytes(16).toString('hex');
       const decodeForView: DecodeOutcome = document.decode.ok
@@ -160,7 +187,10 @@ export class ObufEditorProvider implements vscode.CustomEditorProvider<ObufDocum
     renderFull();
 
     const syncSub = document.onDidSyncContent(() => {
-      const cfg = this.getCliConfig();
+      if (disposed) {
+        return;
+      }
+      const cfg = this.getCliConfig(document.uri);
       const hex = formatHexDump(document.rawBytes, cfg.maxHexBytes);
       void webviewPanel.webview.postMessage({
         type: 'updateJson',
@@ -174,17 +204,27 @@ export class ObufEditorProvider implements vscode.CustomEditorProvider<ObufDocum
     });
 
     const reloadFromDisk = async () => {
-      const cfg = this.getCliConfig();
-      const [rawBytes, decode] = await Promise.all([
-        vscode.workspace.fs.readFile(document.uri),
-        decodeFile(document.uri.fsPath, {
-          cliPath: cfg.cliPath,
-          schemaPath: cfg.schemaPath,
-          messageType: cfg.messageType,
-        }),
-      ]);
-      document.replaceFromDisk(rawBytes, decode);
-      renderFull();
+      try {
+        const cfg = this.getCliConfig(document.uri);
+        const [rawBytes, decode] = await Promise.all([
+          vscode.workspace.fs.readFile(document.uri),
+          decodeFile(document.uri.fsPath, {
+            cliPath: cfg.cliPath,
+            schemaPath: cfg.schemaPath,
+            messageType: cfg.messageType,
+          }),
+        ]);
+        if (disposed) {
+          return;
+        }
+        document.replaceFromDisk(rawBytes, decode);
+        renderFull();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        void vscode.window.showErrorMessage(
+          `Failed to reload ${path.basename(document.uri.fsPath)}: ${message}`,
+        );
+      }
     };
 
     const messageSub = webviewPanel.webview.onDidReceiveMessage(
@@ -209,6 +249,16 @@ export class ObufEditorProvider implements vscode.CustomEditorProvider<ObufDocum
             break;
           }
           case 'refresh':
+            if (document.isDirty) {
+              const choice = await vscode.window.showWarningMessage(
+                `Discard unsaved edits to ${path.basename(document.uri.fsPath)} and reload from disk?`,
+                { modal: true },
+                'Reload',
+              );
+              if (choice !== 'Reload') {
+                break;
+              }
+            }
             await reloadFromDisk();
             break;
           case 'openRaw':
@@ -228,16 +278,39 @@ export class ObufEditorProvider implements vscode.CustomEditorProvider<ObufDocum
       if (this._writingUris.has(uriKey)) {
         return;
       }
+      if (document.isDirty) {
+        if (externalChangePromptOpen) {
+          return;
+        }
+        externalChangePromptOpen = true;
+        void vscode.window
+          .showWarningMessage(
+            `${path.basename(document.uri.fsPath)} changed on disk, but you have unsaved edits.`,
+            'Reload from Disk',
+          )
+          .then((choice) => {
+            externalChangePromptOpen = false;
+            if (choice === 'Reload from Disk' && !disposed) {
+              void reloadFromDisk();
+            }
+          });
+        return;
+      }
       void reloadFromDisk();
     });
 
     const configSub = vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('omnibuf')) {
-        void reloadFromDisk();
+        if (document.isDirty) {
+          renderFull();
+        } else {
+          void reloadFromDisk();
+        }
       }
     });
 
     webviewPanel.onDidDispose(() => {
+      disposed = true;
       panels?.delete(webviewPanel);
       if (panels && panels.size === 0) {
         this._panelsByUri.delete(uriKey);
@@ -259,7 +332,7 @@ export class ObufEditorProvider implements vscode.CustomEditorProvider<ObufDocum
   }
 
   async revertCustomDocument(document: ObufDocument): Promise<void> {
-    const cfg = this.getCliConfig();
+    const cfg = this.getCliConfig(document.uri);
     const [rawBytes, decode] = await Promise.all([
       vscode.workspace.fs.readFile(document.uri),
       decodeFile(document.uri.fsPath, {
@@ -296,7 +369,7 @@ export class ObufEditorProvider implements vscode.CustomEditorProvider<ObufDocum
       throw new Error('Cannot save .obuf file while decode is in an error state.');
     }
 
-    const cfg = this.getCliConfig();
+    const cfg = this.getCliConfig(document.uri);
     const encoded = await encodeJson(document.jsonText, {
       cliPath: cfg.cliPath,
       schemaPath: cfg.schemaPath,
@@ -319,6 +392,7 @@ export class ObufEditorProvider implements vscode.CustomEditorProvider<ObufDocum
 
     if (uriKey === document.uri.toString()) {
       document.rawBytes = encoded.bytes;
+      document.markSaved();
       const hex = formatHexDump(encoded.bytes, cfg.maxHexBytes);
       const panels = this._panelsByUri.get(uriKey);
       if (panels) {

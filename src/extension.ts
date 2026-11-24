@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { decodeFile } from './cli';
-import { ObufEditorProvider, openRawBinaryEditor } from './editorProvider';
+import { ObufEditorProvider, openRawBinaryEditor, resolveSchemaPath } from './editorProvider';
 
 function resolveTargetUri(uri?: vscode.Uri): vscode.Uri | undefined {
   if (uri) {
@@ -23,6 +23,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerCustomEditorProvider(ObufEditorProvider.viewType, provider, {
       webviewOptions: {
         retainContextWhenHidden: true,
+        enableFindWidget: true,
       },
       supportsMultipleEditorsPerDocument: true,
     }),
@@ -51,10 +52,10 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showWarningMessage('No .obuf file selected.');
         return;
       }
-      const cfg = vscode.workspace.getConfiguration('omnibuf');
+      const cfg = vscode.workspace.getConfiguration('omnibuf', target);
       const result = await decodeFile(target.fsPath, {
         cliPath: cfg.get<string>('cliPath', 'omnibuf'),
-        schemaPath: cfg.get<string>('schemaPath', ''),
+        schemaPath: resolveSchemaPath(cfg.get<string>('schemaPath', ''), target),
         messageType: cfg.get<string>('messageType', ''),
       });
       if (!result.ok) {

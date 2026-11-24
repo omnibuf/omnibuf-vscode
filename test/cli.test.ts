@@ -120,3 +120,15 @@ test('decodeFile reports DECODE_FAILED on invalid wire bytes', async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('encodeJson enforces maxBufferBytes cap on stdout', async () => {
+  const res = await encodeJson(
+    JSON.stringify({ payload: 'x'.repeat(256) }),
+    { cliPath: 'omnibuf', maxBufferBytes: 16 },
+  );
+  assert.equal(res.ok, false);
+  if (!res.ok) {
+    assert.equal(res.code, 'ENCODE_FAILED');
+    assert.match(res.message, /exceeded 16 bytes limit/);
+  }
+});

@@ -43,3 +43,23 @@ test('renderWebviewHtml renders error state cleanly while preserving hex pane', 
   assert.match(html, /id="btn-copy" disabled/);
   assert.match(html, /ff ff/);
 });
+
+test('renderWebviewHtml escapes </script> and line separators in inline script fileName', () => {
+  const maliciousName = 'evil</script><img src=x onerror=alert(1)>\u2028\u2029.obuf';
+  const html = renderWebviewHtml({
+    fileName: maliciousName,
+    viewMode: 'json',
+    decode: { ok: true, json: '{}' },
+    hex: formatHexDump(new Uint8Array([0x00])),
+    nonce: '12345678',
+  });
+
+  const scriptMatches = html.match(/<\/script>/gi) ?? [];
+  assert.equal(scriptMatches.length, 1, 'HTML must contain only the single closing </script> tag');
+
+  const inlineDecl = html.match(/const fileName = (".*?");/);
+  const serialized = inlineDecl?.[1];
+  assert.ok(serialized, 'inline fileName declaration should be present');
+  assert.doesNotMatch(serialized, /<|>|\/|\u2028|\u2029/);
+  assert.equal(JSON.parse(serialized), maliciousName);
+});

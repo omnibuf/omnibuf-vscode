@@ -1,5 +1,7 @@
 import { execFile, spawn } from 'node:child_process';
 
+export const MAX_CLI_BUFFER_BYTES = 64 * 1024 * 1024;
+
 export interface DecodeOptions {
   cliPath: string;
   schemaPath?: string;
@@ -14,6 +16,7 @@ export interface EncodeOptions {
   includeField0?: boolean;
   deterministic?: boolean;
   timeoutMs?: number;
+  maxBufferBytes?: number;
 }
 
 export interface DecodeResult {
@@ -90,7 +93,7 @@ export function decodeFile(filePath: string, options: DecodeOptions): Promise<De
       args,
       {
         encoding: 'utf8',
-        maxBuffer: 64 * 1024 * 1024,
+        maxBuffer: MAX_CLI_BUFFER_BYTES,
         timeout: timeoutMs,
       },
       (err, stdout, stderr) => {
@@ -136,9 +139,12 @@ export function encodeJson(jsonText: string, options: EncodeOptions): Promise<En
       }
     };
 
+    const maxBufferBytes = options.maxBufferBytes ?? MAX_CLI_BUFFER_BYTES;
     const child = spawn(cliPath, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
 
     const timer = setTimeout(() => {
       child.kill('SIGTERM');
@@ -149,8 +155,39 @@ export function encodeJson(jsonText: string, options: EncodeOptions): Promise<En
       });
     }, timeoutMs);
 
-    child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
-    child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+    child.stdout.on('data', (chunk: Buffer) => {
+      if (settled) {
+        return;
+      }
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > maxBufferBytes) {
+        child.kill('SIGTERM');
+        finish({
+          ok: false,
+          code: 'ENCODE_FAILED',
+          message: `omnibuf encode stdout exceeded ${maxBufferBytes} bytes limit`,
+        });
+        return;
+      }
+      stdoutChunks.push(chunk);
+    });
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      if (settled) {
+        return;
+      }
+      stderrBytes += chunk.length;
+      if (stderrBytes > maxBufferBytes) {
+        child.kill('SIGTERM');
+        finish({
+          ok: false,
+          code: 'ENCODE_FAILED',
+          message: `omnibuf encode stderr exceeded ${maxBufferBytes} bytes limit`,
+        });
+        return;
+      }
+      stderrChunks.push(chunk);
+    });
 
     child.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'ENOENT') {

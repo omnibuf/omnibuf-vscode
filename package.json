@@ -37,6 +37,15 @@
     "onCommand:omnibuf.copyDecodedJson"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Executing a workspace-configured omnibuf CLI binary is disabled in untrusted workspaces.",
+      "restrictedConfigurations": [
+        "omnibuf.cliPath"
+      ]
+    }
+  },
   "contributes": {
     "customEditors": [
       {
@@ -84,6 +93,7 @@
         "omnibuf.cliPath": {
           "type": "string",
           "default": "omnibuf",
+          "scope": "machine",
           "description": "Path to the omnibuf CLI executable."
         },
         "omnibuf.defaultView": {

@@ -20,6 +20,15 @@ export function escapeHtml(input: string): string {
     .replace(/'/g, '&#39;');
 }
 
+export function serializeForInlineScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\//g, '\\u002f')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
 /**
  * Lightweight syntax highlighter for pretty-printed JSON.
  * Escapes HTML entities before wrapping tokens in span classes.
@@ -404,7 +413,7 @@ export function renderWebviewHtml(model: WebviewRenderModel): string {
     const hexCode = document.getElementById('hex-code');
     const hexHeader = document.getElementById('hex-header');
     const fileMeta = document.getElementById('file-meta');
-    const fileName = ${JSON.stringify(fileName)};
+    const fileName = ${serializeForInlineScript(fileName)};
 
     function escapeHtml(input) {
       return input

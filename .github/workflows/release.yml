@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish_marketplace:
+        description: 'Publish to Visual Studio Marketplace'
+        type: boolean
+        default: true
+      publish_openvsx:
+        description: 'Publish to Open VSX Registry'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Package VSIX
+        run: npx @vscode/vsce package --no-dependencies
+
+      - name: Publish to VS Code Marketplace
+        if: github.event_name != 'workflow_dispatch' || inputs.publish_marketplace
+        run: npx @vscode/vsce publish --packagePath *.vsix --oidc
+
+      - name: Publish to Open VSX
+        if: vars.ENABLE_OPEN_VSX == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_openvsx)
+        env:
+          OVSX_REGISTRATION_CODE: ${{ secrets.OVSX_REGISTRATION_CODE }}
+        run: npx ovsx publish *.vsix --trusted-publishing
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnibuf-vscode-vsix
+          path: '*.vsix'
+
+      - name: Upload VSIX to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: '*.vsix'
+          generate_release_notes: true
