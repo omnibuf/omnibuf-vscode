@@ -9,6 +9,7 @@ tsconfig.json
 pnpm-lock.yaml
 pnpm-workspace.yaml
 .gitignore
-*.map
+renovate.json
+**/*.map
 *.ts
 *.vsix
