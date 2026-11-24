@@ -46,6 +46,12 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      - name: Install omnibuf CLI for integration tests
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://omnibuf.com/install.sh | BIN_DIR="$HOME/.local/bin" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: Run tests
         run: pnpm test
 
