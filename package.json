@@ -2,7 +2,7 @@
   "name": "omnibuf-vscode",
   "displayName": "OmniBuf",
   "description": "View and edit OmniBuf (.obuf) binary files as decoded JSON and hex using the omnibuf CLI",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "omnibuf",
   "license": "Apache-2.0",
   "icon": "media/icon.png",
