@@ -46,6 +46,11 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      - name: Install protoc for Editions integration tests
+        uses: jdx/mise-action@v5
+        with:
+          install_args: protobuf@36.2
+
       - name: Install omnibuf CLI for integration tests
         run: |
           mkdir -p "$HOME/.local/bin"
