@@ -10,7 +10,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: ^26.0.0
-        version: 26.6.10
+        version: 26.6.11
       '@types/vscode':
         specifier: ^1.85.0
         version: 1.146.0
@@ -182,8 +182,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@types/node@26.6.10':
-    resolution: {integrity: sha512-WJuPHoGB8WNQuTksNF7SOQpnH02PXeDYz4iueWbBT6/hTWnShY5F3T/hoJA3fY9+uYReDZ7pyTKKx83jQa7aGg==}
+  '@types/node@26.6.11':
+    resolution: {integrity: sha512-uUyQ2XLEz+EXh34lmS3GhKrkqn/8FU7KUiKRpk347At2bmnMVWss45yz8b4FG/tUtmV1tV/+TVkITItPROyeeQ==}
 
   '@types/vscode@1.146.0':
     resolution: {integrity: sha512-OtU25faeM997QQsW+D07FN9cX06j+EEI4aQaPw/UO3HWlCM39N1W7fG8ewhdZKluut31KffyMsmDzJzgMu6t8Q==}
@@ -411,7 +411,7 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@types/node@26.6.10':
+  '@types/node@26.6.11':
     dependencies:
       undici-types: 8.9.0
 
