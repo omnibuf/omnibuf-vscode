@@ -1,6 +1,9 @@
 # omnibuf-vscode
 
+[![Release](https://github.com/omnibuf/omnibuf-vscode/actions/workflows/release.yml/badge.svg)](https://github.com/omnibuf/omnibuf-vscode/actions/workflows/release.yml)
 [![OmniBuf Spec: v1 DRAFT-1](https://img.shields.io/badge/OmniBuf%20Spec-v1%20DRAFT--1-FF4F18)](https://omnibuf.com/spec)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](./LICENSE)
+[![Website](https://img.shields.io/badge/website-omnibuf.com-111111?style=flat&labelColor=111111&color=D4FF33)](https://omnibuf.com/tooling/editors)
 
 Visual Studio Code extension for inspecting and editing `.obuf` binary files. Part of the [OmniBuf](https://omnibuf.com) [tooling suite](https://omnibuf.com/tooling).
 
